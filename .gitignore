@@ -1,0 +1,10 @@
+*~
+env
+env/
+env/*
+\#**\#
+*.pyc
+__pycache__
+dist
+dist/
+dist/*

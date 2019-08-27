@@ -3,7 +3,7 @@
 import pandas as pd
 from search import searchExcel,searchDataFrame
 from collections import OrderedDict
-
+from random import shuffle
 class Injector:
     #filepath is the path to an excel file
     def __init__(self,filepath,sheet=None):
@@ -41,11 +41,12 @@ class Injector:
 
     #Inject data(list) wherever key is in the dataframe.
     #offset is the verticle dispacement from wherever the key is
-    def injectList(self,data,key,offsetRow=1,offsetColumn=0,strict=False):
+    def injectList(self,data,key,offsetRow=1,offsetColumn=0,strict=True):
         sheet=self.getSheet()
         _column,_row=searchDataFrame(sheet,key,strict=strict)
         column=_column
         row=_row
+        #Convert dataframe to ordered dict because it is easier to work with.
         df=OrderedDict()
         for col in sheet.columns:
             df[col]=list(sheet[col])
@@ -68,7 +69,7 @@ class Injector:
         self.setSheet(pd.DataFrame(df))
         return _column,_row
 
-    def injectMatrix(self,arr_arr,key,offsetRow=1,offsetColumn=0,strict=False):
+    def injectMatrix(self,arr_arr,key,offsetRow=1,offsetColumn=0,strict=True):
         for i,arr in enumerate(arr_arr):
             col,row=self.injectList(arr,key,offsetRow,i+offsetColumn,strict)
 
@@ -85,15 +86,24 @@ class Injector:
     # If `strict` is False then the search will only look for cells that CONTAIN `key`
     # If `strict` is  True then the search will only look for cells that  EQUALS `key`
     #Sorting simply tries to match two columns
-    def sortDictionary(self,dictionary,key,sortKey,offsetRow=1,offsetColumn=0,strict=False):
+    def sortOrderedDict(self,dictionary,key,sortKey,offsetRow=1,offsetColumn=0,strict=True):
         """Match one of the columns in the matrix with one in the excel."""
-        return sortDataFrame(self,pd.DataFrame(dictionary),key,,sortKey,offsetRow,offsetColumn,strict)
+        return self.sortDataFrame(pd.DataFrame(dictionary),key,sortKey,offsetRow,offsetColumn,strict).to_dict()
 
-    def sortDataFrame(self,df,key,column,offsetRow=1,offsetColumn=0,strict=False):
+    def sortDataFrame(self,df,key,column,offsetRow=1,offsetColumn=0,strict=True):
+        #Get sheets and location
         sheet=self.getSheet()
         _column,_row=searchDataFrame(sheet,key,strict=strict)
-        
-        
+
+        #Adjust offsets
+        _row+=offsetRow
+        if offsetColumn != 0:
+            _column=sheet.columns[list(sheet.columns).index(_column)+offsetColumn]
+            
+        subSeries=sheet[_column][_row:_row+len(df)] #Extract data to sort against
+        subSeries=pd.DataFrame(subSeries).reset_index()
+        df=subSeries.merge(df,left_on=_column,right_on=column).drop(_column,axis=1)
+        return df
 
     def save(self,duplicate=False,dryrun=False):
         filepath=self.filepath
@@ -112,22 +122,20 @@ class Injector:
     #What do I do about sorting?
     
 if __name__=='__main__':
-    #For testing
-    ## PRESETS ##
-    from random import gauss
-    N=100
-    filepath="example_data.xlsx"
-    snippet=OrderedDict()
-    snippet['voltage']=[i for i in range(N)]
-    snippet['current']=[i*gauss(5,1) for i in range(N)]
 
+    from random import gauss
+    N=50
+    filepath="example_data.xlsx"
+    
+    snippet=OrderedDict()
+    snippet['voltage']=[.1*i for i in range(N)]
+    snippet['current']=[i*gauss(5,1) for i in range(N)]
+    shuffle(snippet['voltage'])
     ## EXECUTE ##
     excel=Injector(filepath,sheet=0)
-    for i in range(10):
-        excel.nextSheet()
     import time
-    excel.injectList(snippet['current'],'V',offsetRow=None,offsetColumn=1,strict=True)
-    excel.save(duplicate=True)
+    print(excel.sortOrderedDict(snippet,' -V','voltage',strict=True))
+    excel.save(duplicate=True,dryrun=True)
     #Will inject the snipped overlapping the box that is equal to 'V'
     #If strict=False then boxes that contain a V are also vaild.
     #The injector will find the first box that matches the condition.

@@ -8,3 +8,5 @@ __pycache__
 dist
 dist/
 dist/*
+excel_injector.egg-info
+excel_injector.egg-info/
